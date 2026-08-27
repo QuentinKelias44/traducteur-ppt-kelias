@@ -17,7 +17,6 @@ uploaded_file = st.file_uploader("Dépose ton fichier PowerPoint (.pptx) ici", t
 if uploaded_file and api_key:
     if st.button("🚀 Lancer la traduction"):
         try:
-            # Création de la barre de progression
             progress_bar = st.progress(0)
             status_text = st.empty()
             
@@ -76,8 +75,15 @@ Textes à traduire :
                 status_text.text("✍️ Réinjection des textes traduits dans le document...")
                 progress_bar.progress(80)
                 
-                clean_response = response.text.strip().removeprefix("
-```json").removeprefix("```").removesuffix("```").strip()
+                clean_response = response.text.strip()
+                if clean_response.startswith("```json"):
+                    clean_response = clean_response[7:]
+                elif clean_response.startswith("```"):
+                    clean_response = clean_response[3:]
+                if clean_response.endswith("```"):
+                    clean_response = clean_response[:-3]
+                clean_response = clean_response.strip()
+
                 translated_texts = json.loads(clean_response)
 
                 for run, trad in zip(text_runs, translated_texts):
@@ -101,7 +107,6 @@ Textes à traduire :
                 )
 
         except Exception as e:
-            # En cas d'erreur, on efface la barre de chargement
             if 'progress_bar' in locals():
                 progress_bar.empty()
             if 'status_text' in locals():
@@ -109,7 +114,6 @@ Textes à traduire :
                 
             error_msg = str(e)
             
-            # Gestion des messages d'erreur explicites
             if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
                 st.error("⏳ **Quota journalier dépassé.** La limite gratuite de Google a été atteinte pour aujourd'hui. Réessaie demain ou utilise une autre clé API.")
             elif "API_KEY_INVALID" in error_msg or "400" in error_msg:
