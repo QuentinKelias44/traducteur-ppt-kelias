@@ -3,6 +3,7 @@ from pptx import Presentation
 from google import genai
 import io
 import json
+import os
 
 st.set_page_config(page_title="Traducteur de Fiches Produits PPT", page_icon="🌐")
 
@@ -89,7 +90,11 @@ Textes à traduire :
                 for run, trad in zip(text_runs, translated_texts):
                     run.text = trad
 
-                # Étape 4 : Finalisation
+                # Étape 4 : Génération du nom de fichier dynamique
+                nom_base, _ = os.path.splitext(uploaded_file.name)
+                suffixe = ".ES" if langue_cible == "Espagnol" else ".EN"
+                nom_fichier_final = f"{nom_base}{suffixe}.pptx"
+
                 output = io.BytesIO()
                 prs.save(output)
                 output.seek(0)
@@ -100,9 +105,9 @@ Textes à traduire :
                 st.success("🎉 Le document a été intégralement traduit !")
                 
                 st.download_button(
-                    label="📥 Télécharger le PowerPoint Traduit",
+                    label=f"📥 Télécharger {nom_fichier_final}",
                     data=output,
-                    file_name=f"Fiche_Produit_{langue_cible}.pptx",
+                    file_name=nom_fichier_final,
                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 )
 
