@@ -9,7 +9,6 @@ st.set_page_config(page_title="Traducteur de Fiches Produits PPT", page_icon="�
 st.title("🌐 Traducteur de Fiches Produits PowerPoint")
 st.write("Conserve la charte graphique, le design et les zones de texte modifiables !")
 
-# Clé API et Langue
 api_key = st.text_input("Entre ta clé d'API Google AI Studio :", type="password")
 langue_cible = st.selectbox("Choisir la langue de traduction :", ["Anglais", "Espagnol"])
 
@@ -29,18 +28,18 @@ CONSIGNES STRICTES :
 Texte à traduire :
 {texte}"""
 
-    # Gestion des réessais en cas de surcharge serveur (Error 503)
-    max_retries = 3
+    max_retries = 5
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
                 model='gemini-3.6-flash',
                 contents=prompt
             )
+            time.sleep(1.5)  # Pause pour respecter la limite de 5 requêtes / min
             return response.text.strip()
         except Exception as e:
-            if "503" in str(e) and attempt < max_retries - 1:
-                time.sleep(2)  # Pause de 2 secondes avant de réessayer
+            if ("429" in str(e) or "503" in str(e)) and attempt < max_retries - 1:
+                time.sleep(12)  # Attente de 12 sec si le quota est atteint
                 continue
             else:
                 raise e
@@ -52,7 +51,7 @@ if uploaded_file and api_key:
             prs = Presentation(uploaded_file)
             
             progress_bar = st.progress(0)
-            st.info("Traduction en cours... Veuillez patienter.")
+            st.info("Traduction en cours... Veuillez patienter (un délai est appliqué pour respecter les quotas gratuits).")
             
             total_shapes = sum(len(slide.shapes) for slide in prs.slides)
             count = 0
