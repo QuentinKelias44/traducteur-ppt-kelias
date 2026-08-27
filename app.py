@@ -17,12 +17,17 @@ uploaded_file = st.file_uploader("Dépose ton fichier PowerPoint (.pptx) ici", t
 if uploaded_file and api_key:
     if st.button("🚀 Lancer la traduction"):
         try:
+            # Création de la barre de progression
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
             client = genai.Client(api_key=api_key.strip())
             prs = Presentation(uploaded_file)
             
-            st.info("Extraction et traduction globale en cours... Veuillez patienter.")
+            # Étape 1 : Extraction
+            status_text.text("🔍 Extraction du texte de la présentation...")
+            progress_bar.progress(20)
             
-            # 1. Collecter tous les morceaux de texte
             text_runs = []
             for slide in prs.slides:
                 for shape in slide.shapes:
@@ -40,9 +45,14 @@ if uploaded_file and api_key:
                                             text_runs.append(run)
 
             if not text_runs:
+                progress_bar.empty()
+                status_text.empty()
                 st.warning("⚠️ Aucun texte à traduire n'a été trouvé dans ce fichier.")
             else:
-                # 2. Préparer la liste des textes
+                # Étape 2 : Préparation et Envoi à l'IA
+                status_text.text("🤖 Traduction en cours avec Gemini... Veuillez patienter quelques secondes.")
+                progress_bar.progress(50)
+                
                 original_texts = [r.text for r in text_runs]
                 
                 prompt = f"""Tu es un traducteur expert en matériel industriel, signalisation et BTP.
@@ -56,25 +66,32 @@ CONSIGNES STRICTES :
 Textes à traduire :
 {json.dumps(original_texts, ensure_ascii=False)}"""
 
-                # 3. Envoi à l'API
+                # Envoi API
                 response = client.models.generate_content(
                     model='gemini-3.6-flash',
                     contents=prompt
                 )
                 
-                # Lecture de la réponse JSON
-                clean_response = response.text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                # Étape 3 : Traitement de la réponse et réinjection
+                status_text.text("✍️ Réinjection des textes traduits dans le document...")
+                progress_bar.progress(80)
+                
+                clean_response = response.text.strip().removeprefix("
+```json").removeprefix("```").removesuffix("```").strip()
                 translated_texts = json.loads(clean_response)
 
-                # 4. Réinjection des textes traduits
                 for run, trad in zip(text_runs, translated_texts):
                     run.text = trad
 
+                # Étape 4 : Finalisation
                 output = io.BytesIO()
                 prs.save(output)
                 output.seek(0)
                 
-                st.success("✅ Traduction terminée avec succès !")
+                progress_bar.progress(100)
+                status_text.text("✅ Traduction terminée avec succès !")
+                
+                st.success("🎉 Le document a été intégralement traduit !")
                 
                 st.download_button(
                     label="📥 Télécharger le PowerPoint Traduit",
@@ -84,9 +101,15 @@ Textes à traduire :
                 )
 
         except Exception as e:
+            # En cas d'erreur, on efface la barre de chargement
+            if 'progress_bar' in locals():
+                progress_bar.empty()
+            if 'status_text' in locals():
+                status_text.empty()
+                
             error_msg = str(e)
             
-            # Personnalisation des messages d'erreur pour les utilisateurs
+            # Gestion des messages d'erreur explicites
             if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
                 st.error("⏳ **Quota journalier dépassé.** La limite gratuite de Google a été atteinte pour aujourd'hui. Réessaie demain ou utilise une autre clé API.")
             elif "API_KEY_INVALID" in error_msg or "400" in error_msg:
