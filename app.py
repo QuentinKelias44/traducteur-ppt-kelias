@@ -22,9 +22,8 @@ if uploaded_file and api_key:
             
             st.info("Extraction et traduction globale en cours... Veuillez patienter.")
             
-            # 1. Collecter tous les morceaux de texte avec leur emplacement
+            # 1. Collecter tous les morceaux de texte
             text_runs = []
-            
             for slide in prs.slides:
                 for shape in slide.shapes:
                     if shape.has_text_frame:
@@ -41,7 +40,7 @@ if uploaded_file and api_key:
                                             text_runs.append(run)
 
             if not text_runs:
-                st.warning("Aucun texte à traduire n'a été trouvé dans ce fichier.")
+                st.warning("⚠️ Aucun texte à traduire n'a été trouvé dans ce fichier.")
             else:
                 # 2. Préparer la liste des textes
                 original_texts = [r.text for r in text_runs]
@@ -57,17 +56,17 @@ CONSIGNES STRICTES :
 Textes à traduire :
 {json.dumps(original_texts, ensure_ascii=False)}"""
 
-                # 3. Une seule requête API pour TOUT le document
+                # 3. Envoi à l'API
                 response = client.models.generate_content(
                     model='gemini-3.6-flash',
                     contents=prompt
                 )
                 
-                # Nettoyage et lecture du JSON
+                # Lecture de la réponse JSON
                 clean_response = response.text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
                 translated_texts = json.loads(clean_response)
 
-                # 4. Réinjection des textes traduits dans le PPT
+                # 4. Réinjection des textes traduits
                 for run, trad in zip(text_runs, translated_texts):
                     run.text = trad
 
@@ -75,7 +74,7 @@ Textes à traduire :
                 prs.save(output)
                 output.seek(0)
                 
-                st.success("✅ Traduction terminée en 1 seule requête !")
+                st.success("✅ Traduction terminée avec succès !")
                 
                 st.download_button(
                     label="📥 Télécharger le PowerPoint Traduit",
@@ -85,4 +84,14 @@ Textes à traduire :
                 )
 
         except Exception as e:
-            st.error(f"Une erreur est survenue : {e}")
+            error_msg = str(e)
+            
+            # Personnalisation des messages d'erreur pour les utilisateurs
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                st.error("⏳ **Quota journalier dépassé.** La limite gratuite de Google a été atteinte pour aujourd'hui. Réessaie demain ou utilise une autre clé API.")
+            elif "API_KEY_INVALID" in error_msg or "400" in error_msg:
+                st.error("🔑 **Clé API invalide.** Vérifie que tu as bien copié-collé ta clé Google AI Studio sans espace en trop.")
+            elif "503" in error_msg or "UNAVAILABLE" in error_msg:
+                st.error("🌐 **Serveur temporairement indisponible.** Les serveurs de Google sont en surcharge. Patiente 1 minute et relance.")
+            else:
+                st.error(f"❌ **Une erreur est survenue :** {error_msg}")
