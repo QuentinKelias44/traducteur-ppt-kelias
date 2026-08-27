@@ -2,6 +2,7 @@ import streamlit as st
 from pptx import Presentation
 from google import genai
 import io
+import time
 
 st.set_page_config(page_title="Traducteur de Fiches Produits PPT", page_icon="🌐")
 
@@ -28,11 +29,21 @@ CONSIGNES STRICTES :
 Texte à traduire :
 {texte}"""
 
-    response = client.models.generate_content(
-        model='gemini-3.6-flash',
-        contents=prompt
-    )
-    return response.text.strip()
+    # Gestion des réessais en cas de surcharge serveur (Error 503)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
+            return response.text.strip()
+        except Exception as e:
+            if "503" in str(e) and attempt < max_retries - 1:
+                time.sleep(2)  # Pause de 2 secondes avant de réessayer
+                continue
+            else:
+                raise e
 
 if uploaded_file and api_key:
     if st.button("🚀 Lancer la traduction"):
@@ -43,21 +54,18 @@ if uploaded_file and api_key:
             progress_bar = st.progress(0)
             st.info("Traduction en cours... Veuillez patienter.")
             
-            # Compter le nombre de formes avec du texte
             total_shapes = sum(len(slide.shapes) for slide in prs.slides)
             count = 0
 
             for slide in prs.slides:
                 for shape in slide.shapes:
                     count += 1
-                    # Traduction dans les zones de texte
                     if shape.has_text_frame:
                         for paragraph in shape.text_frame.paragraphs:
                             for run in paragraph.runs:
                                 if run.text.strip():
                                     run.text = traduire_texte(client, run.text, langue_cible)
                     
-                    # Traduction dans les tableaux
                     if shape.has_table:
                         for row in shape.table.rows:
                             for cell in row.cells:
@@ -68,7 +76,6 @@ if uploaded_file and api_key:
                                             
                     progress_bar.progress(min(count / total_shapes, 1.0))
 
-            # Sauvegarde en mémoire
             output = io.BytesIO()
             prs.save(output)
             output.seek(0)
