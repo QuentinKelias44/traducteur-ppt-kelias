@@ -44,15 +44,8 @@ if uploaded_file and api_key:
                                         if run.text.strip():
                                             liste.append(run)
 
-            # Texte des diapositives
             for slide in prs.slides:
                 extraire_texte_shapes(slide.shapes, text_runs)
-
-            # Texte des masques (masters) et de leurs mises en page (layouts)
-            for master in prs.slide_masters:
-                extraire_texte_shapes(master.shapes, text_runs)
-                for layout in master.slide_layouts:
-                    extraire_texte_shapes(layout.shapes, text_runs)
 
             if not text_runs:
                 progress_bar.empty()
