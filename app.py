@@ -12,7 +12,6 @@ st.write("Conserve la charte graphique, le design et les zones de texte modifiab
 
 api_key = st.text_input("Entre ta clé d'API Google AI Studio :", type="password")
 langue_cible = st.selectbox("Choisir la langue de traduction :", ["Anglais", "Espagnol"])
-
 uploaded_file = st.file_uploader("Dépose ton fichier PowerPoint (.pptx) ici", type=["pptx"])
 
 if uploaded_file and api_key:
@@ -20,29 +19,40 @@ if uploaded_file and api_key:
         try:
             progress_bar = st.progress(0)
             status_text = st.empty()
-            
+
             client = genai.Client(api_key=api_key.strip())
             prs = Presentation(uploaded_file)
-            
+
             # Étape 1 : Extraction
             status_text.text("🔍 Extraction du texte de la présentation...")
             progress_bar.progress(20)
-            
+
             text_runs = []
-            for slide in prs.slides:
-                for shape in slide.shapes:
+
+            def extraire_texte_shapes(shapes, liste):
+                for shape in shapes:
                     if shape.has_text_frame:
                         for paragraph in shape.text_frame.paragraphs:
                             for run in paragraph.runs:
                                 if run.text.strip():
-                                    text_runs.append(run)
+                                    liste.append(run)
                     if shape.has_table:
                         for row in shape.table.rows:
                             for cell in row.cells:
                                 for paragraph in cell.text_frame.paragraphs:
                                     for run in paragraph.runs:
                                         if run.text.strip():
-                                            text_runs.append(run)
+                                            liste.append(run)
+
+            # Texte des diapositives
+            for slide in prs.slides:
+                extraire_texte_shapes(slide.shapes, text_runs)
+
+            # Texte des masques (masters) et de leurs mises en page (layouts)
+            for master in prs.slide_masters:
+                extraire_texte_shapes(master.shapes, text_runs)
+                for layout in master.slide_layouts:
+                    extraire_texte_shapes(layout.shapes, text_runs)
 
             if not text_runs:
                 progress_bar.empty()
@@ -52,12 +62,11 @@ if uploaded_file and api_key:
                 # Étape 2 : Préparation et Envoi à l'IA
                 status_text.text("🤖 Traduction en cours avec Gemini... Veuillez patienter quelques secondes.")
                 progress_bar.progress(50)
-                
+
                 original_texts = [r.text for r in text_runs]
-                
+
                 prompt = f"""Tu es un traducteur expert en matériel industriel, signalisation et BTP.
 Traduis la liste de textes suivante en {langue_cible}.
-
 CONSIGNES STRICTES :
 - Conserve le ton technique, concis et professionnel.
 - Ne traduis PAS les normes (CE, NF, WL9, PL3, etc.), les dimensions (mm, kg, °C), ni les noms de marque (KELIAS, Px3 Plus, etc.).
@@ -71,11 +80,11 @@ Textes à traduire :
                     model='gemini-3.6-flash',
                     contents=prompt
                 )
-                
+
                 # Étape 3 : Traitement de la réponse et réinjection
                 status_text.text("✍️ Réinjection des textes traduits dans le document...")
                 progress_bar.progress(80)
-                
+
                 clean_response = response.text.strip()
                 if clean_response.startswith("```json"):
                     clean_response = clean_response[7:]
@@ -98,12 +107,11 @@ Textes à traduire :
                 output = io.BytesIO()
                 prs.save(output)
                 output.seek(0)
-                
+
                 progress_bar.progress(100)
                 status_text.text("✅ Traduction terminée avec succès !")
-                
                 st.success("🎉 Le document a été intégralement traduit !")
-                
+
                 st.download_button(
                     label=f"📥 Télécharger {nom_fichier_final}",
                     data=output,
@@ -116,9 +124,8 @@ Textes à traduire :
                 progress_bar.empty()
             if 'status_text' in locals():
                 status_text.empty()
-                
+
             error_msg = str(e)
-            
             if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
                 st.error("⏳ **Quota journalier dépassé.** La limite gratuite de Google a été atteinte pour aujourd'hui. Réessaie demain ou utilise une autre clé API.")
             elif "API_KEY_INVALID" in error_msg or "400" in error_msg:
